@@ -1,3 +1,5 @@
+import os
+import cv2
 import torch
 from torch import nn as nn
 from torch.autograd import Variable
@@ -246,47 +248,151 @@ def predict(categories, image_path, model, use_gpu, topk):
     model.eval()
     
     with torch.no_grad():
-        # Implement the code to predict the class from an image file    
-        # Processs the image
-        image_tensor = helpers.ProcessImage.process_image(image_path)
+        # Get the file name and extension
+        file_name, file_extension = os.path.splitext(image_path)
 
-        # We need a tensor for the model so change the image to a np.Array and then a tensor
-        #image = torch.from_numpy(image).float()
-        
-        image_tensor = image_tensor.unsqueeze_(0)
-        image = Variable(image_tensor)
-        image.to('cpu')
+        # Determine if the file is an image or video
+        # If the file is a video use VideoCapture logic to get each frame in the video and track the weight to count reps
+        # Return the reps, class and probabilities
+        if file_extension == '.mp4':
+            # Get the vieo from a mp4 file
+            video_capture = cv2.VideoCapture(image_path)
 
-        # Use the model to make a prediction
-        logps = model.forward(image)
-        ps = torch.exp(logps)
-        #ps = F.softmax(logps.data)
-        #print("PS: {}".format(ps))
-        # Get the top 5 probabilities and index of classes. This is returned as a tensor of lists
-        p, classes = ps.topk(topk)
-        #print("Raw Probs: {}".format(p))
-        #print("Raw Classes: {}".format(classes))
-        # Get the first items in the tensor list to get the list of probs and classes
-        top_p = p.tolist()[0]
-        top_classes = classes.tolist()[0]
-        print("Top p: {}".format(top_p))
-        print("Classes: {}".format(top_classes))
-        
-        #print(top_classes)
+            def nothing(x):
+                pass
 
-        # Reverse the categories dictionary
-        #inv_categories = {value: key for key, value in categories.items()}
-        # Get the lables from the json file
-        labels = []
-        for c in top_classes:
-            labels.append(categories[str(c+1)])
+            cv2.namedWindow("Tracking Window")
+            cv2.createTrackbar("Lower Hue", "Tracking Window", 0, 255, nothing)
+            cv2.createTrackbar("Lower Saturation", "Tracking Window", 0, 255, nothing)
+            cv2.createTrackbar("Lower Value", "Tracking Window", 0, 255, nothing)
+            cv2.createTrackbar("Upper Hue", "Tracking Window", 255, 255, nothing)
+            cv2.createTrackbar("Upper Saturation", "Tracking Window", 255, 255, nothing)
+            cv2.createTrackbar("Upper Value", "Tracking Window", 255, 255, nothing)
 
     
-        output = list(zip(top_p, labels))
+            first_point = 0
+            reps = 0
+            left_range = False
+            completed_rep = False
+            # Loop through the video and track the weights to count the reps
+            while True:
+                
+                
+                # Capture the next frame
+                _, frame = video_capture.read()
+                #frame = cv2.imread("./ImagesForProject/test/3/image3771.jpg")
+                # If there are no more frames to capture break out of the loop
+                if frame is None:
+                    break
 
-        print("Top Probabilities and their Classes: {}".format(output))
-        return top_p, labels
+                frame = cv2.resize(frame, (256,256))
 
+                # Convert the colored image from the video into an HSV image
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                l_h = cv2.getTrackbarPos("Lower Hue", "Tracking Window")
+                l_s = cv2.getTrackbarPos("Lower Saturation", "Tracking Window")
+                l_v = cv2.getTrackbarPos("Lower Value", "Tracking Window")
+
+                u_h = cv2.getTrackbarPos("Upper Hue", "Tracking Window")
+                u_s = cv2.getTrackbarPos("Upper Saturation", "Tracking Window")
+                u_v = cv2.getTrackbarPos("Upper Value", "Tracking Window")
+
+                # Define the color of the weights to track
+                lower_bound = np.array([173 , 56, 16])
+                upper_bound = np.array([248,213,73])
+
+                mask = cv2.inRange(hsv, lower_bound, upper_bound)
+
+                points = cv2.findNonZero(mask)
+                
+                avg = np.mean(points, axis=0)
+                print("Average point: {}".format(avg))
+                point_in_screen = ((1920/256 * avg[0][0]), (1080/256 * avg[0][1]))
+                # Get the y coordinate (top to bottom movement) for each image and find the max distance
+                # This distance will be used to judge a repition (if the distance is covered)
+                
+
+                if first_point == 0:
+                    first_point = point_in_screen[1]
+                
+
+                if point_in_screen[1] < first_point + 40:
+                    if left_range == True:
+                        completed_rep = True
+                        left_range = False
+                        reps += 1
+                elif point_in_screen[1] > first_point + 40:
+                    if left_range == False:
+                        completed_rep = False
+                        left_range = True
+
+                print("point_in_screen: {}".format(point_in_screen[1]))
+                print("first_point: {}".format(first_point))
+
+                print(reps)
+                
+                
+                print("Point in screen: {}".format(point_in_screen))
+                
+                res = cv2.bitwise_and(frame, frame, mask = mask)
+
+                cv2.imshow("frame", frame)
+                cv2.imshow("mask", mask)
+                cv2.imshow("res", res)
+                
+
+                key = cv2.waitKey(1)
+                if key == 27:
+                    break
+
+            # Release the capture and kill any cv windows
+            video_capture.release()
+            cv2.destroyAllWindows()
+
+
+        
+        elif file_extension == '.jpg':
+        # If the file is an image predict the class and return the class and probabilities
+            # Processs the image
+            image_tensor = helpers.ProcessImage.process_image(image_path)
+
+            # unsqueeze the tensor and set it to the device for inference            
+            image_tensor = image_tensor.unsqueeze_(0)
+            image = Variable(image_tensor)
+            image.to('cpu')
+
+            # Use the model to make a prediction
+            logps = model.forward(image)
+            ps = torch.exp(logps)
+            
+            # Get the top 5 probabilities and index of classes. This is returned as a tensor of lists
+            p, classes = ps.topk(topk)
+            
+            # Get the first items in the tensor list to get the list of probs and classes
+            top_p = p.tolist()[0]
+            top_classes = classes.tolist()[0]
+            print("Top p: {}".format(top_p))
+            print("Classes: {}".format(top_classes))
+            
+            
+            # Get the exersice name from the json file, using the indexes that come back from topk, and store them in a list
+            labels = []
+            for c in top_classes:
+                labels.append(categories[str(c+1)])
+
+            # Zip the probabilities with the exersice name
+            output = list(zip(top_p, labels))
+
+            print("Top Probabilities and their Classes: {}".format(output))
+            return top_p, labels
+        else:
+        # Return if the file is not a video or image format we support
+            print("The image or video file was not in a supported format. Try jpg or mp4")
+            return 0
+        
+        
+
+        
 
 def sanity_check(cat_to_name, file_path, model, index):
     # Display an image along with the top 5 classes
