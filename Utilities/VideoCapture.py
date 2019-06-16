@@ -19,7 +19,7 @@ except OSError:
 # Get the vieo from a url
 video_capture = cv2.VideoCapture('./data/video.mp4')
 
-currentFrame = 2100
+currentFrame = 200
 while(True):
     # Capture the next frame
     ret, frame = video_capture.read()
@@ -34,7 +34,7 @@ while(True):
     # Increase for a unique name
     currentFrame +=1
 
-    if currentFrame == 2500:
+    if currentFrame == 250:
         break
 
 # Release the capture
