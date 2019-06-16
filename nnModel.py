@@ -38,7 +38,7 @@ def create_model(arch, hidden_units):
     model.classifier = nn.Sequential(nn.Linear(input_features,hidden_units),
                                      nn.ReLU(),         
                                      nn.Dropout(0.5),                            
-                                     nn.Linear(hidden_units,102),
+                                     nn.Linear(hidden_units,3),
                                      nn.LogSoftmax(dim=1))
 
     print("Done creating the model\n")
@@ -269,7 +269,8 @@ def predict(categories, image_path, model, use_gpu, topk):
         # Get the first items in the tensor list to get the list of probs and classes
         top_p = p.tolist()[0]
         top_classes = classes.tolist()[0]
-
+        print("Top p: {}".format(top_p))
+        print("Classes: {}".format(top_classes))
         
         #print(top_classes)
 
@@ -278,7 +279,7 @@ def predict(categories, image_path, model, use_gpu, topk):
         # Get the lables from the json file
         labels = []
         for c in top_classes:
-            labels.append(categories[c])
+            labels.append(categories[str(c+1)])
 
     
         output = list(zip(top_p, labels))

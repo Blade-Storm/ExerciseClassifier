@@ -1,6 +1,6 @@
 # Video capture utility. Got the idea (and code) from here:
 # https://github.com/arundasan91/Machine-Learning/blob/master/OpenCV/youtube-to-frames.py
-
+# TODO: Update this function to only grab the frames in the video instead of using an abitrary breakpoint to avoid creating empty files
 import cv2
 import numpy
 import os
@@ -15,11 +15,15 @@ try:
 except OSError:
     print('Error Creating directory of data')
 
-#s.system("youtube-dl -o " + 'data/video.mp4' + " -f mp4 " + 'data/video')
-# Get the vieo from a url
+
+# Get the vieo from a mp4 file
 video_capture = cv2.VideoCapture('./data/video.mp4')
 
-currentFrame = 200
+# Keep track of the frames for each folder (squat, bench, etc...) to prevent duplicate names and overriting files
+# Also gives us a breakpoint to exit the loop
+currentFrame = 350
+
+# Loop through the video and save the frames
 while(True):
     # Capture the next frame
     ret, frame = video_capture.read()
@@ -31,13 +35,14 @@ while(True):
     #cv2.imshow('frame', frame)
 
 
-    # Increase for a unique name
+    # Increase current frame for a unique name and hit a breakpoint to exit
+    # TODO: Update this function to only grab the frames in the video instead of using an abitrary breakpoint to avoid creating empty files
     currentFrame +=1
 
-    if currentFrame == 250:
+    if currentFrame == 400:
         break
 
-# Release the capture
+# Release the capture and kill any cv windows
 video_capture.release()
 cv2.destroyAllWindows()
 
