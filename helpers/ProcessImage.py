@@ -4,15 +4,22 @@ import matplotlib.pyplot as plt
 import torchvision
 from torchvision import transforms
 
-def process_image(image_path):
+def process_image(path, is_image):
     ''' Scales, crops, and normalizes a PIL image for a PyTorch model,
         returns an Numpy array
+
+        path: The path to the video or image file
+        is_image: True if the path leads to an image False if its a video
     '''
     
     # Process a PIL image for use in a PyTorch model
-    # Open the image
-    img = Image.open(image_path)
-    
+    # Open the image if we have one
+    if is_image:
+        img = Image.open(path)
+    else:
+        # If we have a video get the RGB Image from the frame array
+        img = Image.fromarray(path.astype('uint8'), 'RGB')
+
     transform = transforms.Compose([transforms.Resize(256),
                                     transforms.CenterCrop(224),
                                     transforms.ToTensor(),

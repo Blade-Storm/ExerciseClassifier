@@ -10,6 +10,9 @@ import time
 import helpers.ProcessImage
 import matplotlib.pyplot as plt
 import numpy as np
+import win32api
+from win32api import GetSystemMetrics
+
 #from workspace_utils import active_session
 
 
@@ -248,26 +251,38 @@ def predict(categories, image_path, model, use_gpu, topk):
     model.eval()
     
     with torch.no_grad():
-        # Get the file name and extension
-        file_name, file_extension = os.path.splitext(image_path)
+        # Get the file extension
+        _, file_extension = os.path.splitext(image_path)
 
         # Determine if the file is an image or video
         # If the file is a video use VideoCapture logic to get each frame in the video and track the weight to count reps
         # Return the reps, class and probabilities
+        # TODO: Figure out a more generic way to get the color of the wieghts. Perhaps train a classifier to return the RGB values to then conver to HSV
         if file_extension == '.mp4':
             # Get the vieo from a mp4 file
             video_capture = cv2.VideoCapture(image_path)
 
-            def nothing(x):
-                pass
+            # Get how many frames are in the video to classify the exersice once at the start, middle, and end of the video
+            # Set the frame_count to 
+            frame_count = 1 
+            # lets try to determine the number of frames in a video via video properties; this method can be very buggy and might throw an error based on the OpenCV version
+            # or may fail entirely based on which video codecs you have installed
+            try:
+                frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))    
+            # Error
+            except:
+                print("There was an issue counting the frames in the video")
 
-            cv2.namedWindow("Tracking Window")
-            cv2.createTrackbar("Lower Hue", "Tracking Window", 0, 255, nothing)
-            cv2.createTrackbar("Lower Saturation", "Tracking Window", 0, 255, nothing)
-            cv2.createTrackbar("Lower Value", "Tracking Window", 0, 255, nothing)
-            cv2.createTrackbar("Upper Hue", "Tracking Window", 255, 255, nothing)
-            cv2.createTrackbar("Upper Saturation", "Tracking Window", 255, 255, nothing)
-            cv2.createTrackbar("Upper Value", "Tracking Window", 255, 255, nothing)
+            #def nothing(x):
+            #    pass
+
+            #cv2.namedWindow("Tracking Window")
+            #cv2.createTrackbar("Lower Hue", "Tracking Window", 0, 255, nothing)
+            #cv2.createTrackbar("Lower Saturation", "Tracking Window", 0, 255, nothing)
+            #cv2.createTrackbar("Lower Value", "Tracking Window", 0, 255, nothing)
+            #cv2.createTrackbar("Upper Hue", "Tracking Window", 255, 255, nothing)
+            #cv2.createTrackbar("Upper Saturation", "Tracking Window", 255, 255, nothing)
+            #cv2.createTrackbar("Upper Value", "Tracking Window", 255, 255, nothing)
 
     
             first_point = 0
@@ -275,75 +290,127 @@ def predict(categories, image_path, model, use_gpu, topk):
             left_range = False
             completed_rep = False
             # Loop through the video and track the weights to count the reps
-            while True:
-                
-                
+            while True:   
                 # Capture the next frame
                 _, frame = video_capture.read()
                 #frame = cv2.imread("./ImagesForProject/test/3/image3771.jpg")
+
                 # If there are no more frames to capture break out of the loop
                 if frame is None:
                     break
 
-                frame = cv2.resize(frame, (256,256))
-
+                
                 # Convert the colored image from the video into an HSV image
                 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                l_h = cv2.getTrackbarPos("Lower Hue", "Tracking Window")
-                l_s = cv2.getTrackbarPos("Lower Saturation", "Tracking Window")
-                l_v = cv2.getTrackbarPos("Lower Value", "Tracking Window")
+                #l_h = cv2.getTrackbarPos("Lower Hue", "Tracking Window")
+                #l_s = cv2.getTrackbarPos("Lower Saturation", "Tracking Window")
+                #l_v = cv2.getTrackbarPos("Lower Value", "Tracking Window")
 
-                u_h = cv2.getTrackbarPos("Upper Hue", "Tracking Window")
-                u_s = cv2.getTrackbarPos("Upper Saturation", "Tracking Window")
-                u_v = cv2.getTrackbarPos("Upper Value", "Tracking Window")
+                #u_h = cv2.getTrackbarPos("Upper Hue", "Tracking Window")
+                #u_s = cv2.getTrackbarPos("Upper Saturation", "Tracking Window")
+                #u_v = cv2.getTrackbarPos("Upper Value", "Tracking Window")
 
                 # Define the color of the weights to track
-                lower_bound = np.array([173 , 56, 16])
-                upper_bound = np.array([248,213,73])
+                # TODO: Figure out a more generic way to get the color of the wieghts. Perhaps train a classifier to return the RGB values to then convert to HSV
+                lower_color_bound = np.array([173 , 56, 16])
+                upper_color_bound = np.array([248,213,73])
 
-                mask = cv2.inRange(hsv, lower_bound, upper_bound)
+                # Create the mask with the upper and lower color bounds
+                mask = cv2.inRange(hsv, lower_color_bound, upper_color_bound)
 
+                # Get the points the correspond with the colors we are looking for
                 points = cv2.findNonZero(mask)
                 
+                # Get the avg of the points locations, this will allow us to center onto the color we are looking for
                 avg = np.mean(points, axis=0)
-                print("Average point: {}".format(avg))
-                point_in_screen = ((1920/256 * avg[0][0]), (1080/256 * avg[0][1]))
-                # Get the y coordinate (top to bottom movement) for each image and find the max distance
-                # This distance will be used to judge a repition (if the distance is covered)
                 
+                # Get the height and the width of the frame to get the point where the object is on the screen
+                # Get the points corrdinates on the frame
+                frame_height, frame_width = frame.shape[:2]
+                # Get the width and height of the current screen
+                width  = int(GetSystemMetrics(0))
+                height = int(GetSystemMetrics(1))
 
+                # Get the point where the weights are
+                point_in_screen = ((width/frame_width * avg[0][0]), (height/frame_height * avg[0][1]))
+                
+                # Store the starting point
                 if first_point == 0:
                     first_point = point_in_screen[1]
                 
+                # Classify the exercise and determine the reps
+                # Classify once at the begning, middle, and end of the video
+                # CAP_PROP_POS_FRAMES = 1
+                if video_capture.get(1) == 1 or video_capture.get(1) == frame_count / 2 or video_capture.get(1) == frame_count:
+                    # Processs the image
+                    image_tensor = helpers.ProcessImage.process_image(frame, False)
 
+                    # unsqueeze the tensor and set it to the device for inference            
+                    image_tensor = image_tensor.unsqueeze_(0)
+                    image = Variable(image_tensor)
+                    image.to('cpu')
+ 
+                    # Use the model to make a prediction
+                    logps = model.forward(image)
+                    ps = torch.exp(logps)
+                    
+                    # Get the top 5 probabilities and index of classes. This is returned as a tensor of lists
+                    p, classes = ps.topk(1)
+                    
+                    # Get the first items in the tensor list to get the list of probs and classes
+                    top_p = p.tolist()[0]
+                    top_classes = classes.tolist()[0]
+                    #print("Top p: {}".format(top_p))
+                    #print("Classes: {}".format(top_classes))
+                    
+                    
+                    # Get the exersice name from the json file, using the indexes that come back from topk, and store them in a list
+                    labels = []
+                    for c in top_classes:
+                        labels.append(categories[str(c+1)])
+
+                    # Zip the probabilities with the exersice name
+                    output = list(zip(top_p, labels))
+
+                    print("Top Class and Probability: {} {}".format(output[0][1], output[0][0] * 100))
+                    
+
+                # For Exersices that start with the weight at the top and move: TOP -> BOTTOM -> TOP to count one repitition:
+                # If the current point is less than the starting point we are still at the top of the movement
+                # Weight starts at the top where numbers are close to 0 and then moves down increasing disctance from x-axis
+                # The + 40 is abritrary and gives us a "range" for when there is variance when a person is moving but not starting the exercise movement
+                # Leaving and re-entering this range will determine a repitition
                 if point_in_screen[1] < first_point + 40:
+                    # If left_range is true then we have returned from the bottom of the movement 
+                    # Set left_range back to False since we are back at the top of the movement
+                    # Incrament rep
                     if left_range == True:
                         completed_rep = True
                         left_range = False
                         reps += 1
+                        print("Total Reps: {}".format(reps))
+                # Weight is currently out of the top of the movement and has started to go or is coming back from the bottom
                 elif point_in_screen[1] > first_point + 40:
+                    # If left_range is False then we have just started the movement to go down
+                    # Set completed_rep to False
+                    # Set left_range to True 
                     if left_range == False:
                         completed_rep = False
                         left_range = True
+                        
 
-                print("point_in_screen: {}".format(point_in_screen[1]))
-                print("first_point: {}".format(first_point))
+                #print("point_in_screen: {}".format(point_in_screen[1]))
+                #print("first_point: {}".format(first_point))
 
-                print(reps)
+                # For viewing purposes when using an image or video
+                #res = cv2.bitwise_and(frame, frame, mask = mask)
+                #cv2.imshow("frame", frame)
+                #cv2.imshow("mask", mask)
+                #cv2.imshow("res", res)
                 
-                
-                print("Point in screen: {}".format(point_in_screen))
-                
-                res = cv2.bitwise_and(frame, frame, mask = mask)
-
-                cv2.imshow("frame", frame)
-                cv2.imshow("mask", mask)
-                cv2.imshow("res", res)
-                
-
-                key = cv2.waitKey(1)
-                if key == 27:
-                    break
+                #key = cv2.waitKey(1)
+                #if key == 27:
+                #    break
 
             # Release the capture and kill any cv windows
             video_capture.release()
@@ -354,7 +421,7 @@ def predict(categories, image_path, model, use_gpu, topk):
         elif file_extension == '.jpg':
         # If the file is an image predict the class and return the class and probabilities
             # Processs the image
-            image_tensor = helpers.ProcessImage.process_image(image_path)
+            image_tensor = helpers.ProcessImage.process_image(image_path, True)
 
             # unsqueeze the tensor and set it to the device for inference            
             image_tensor = image_tensor.unsqueeze_(0)
@@ -403,7 +470,7 @@ def sanity_check(cat_to_name, file_path, model, index):
     ax = fig.add_axes([.5, .4, .225, .225])
 
     # Process the image and show it
-    result = helpers.ProcessImage.process_image(file_path)
+    result = helpers.ProcessImage.process_image(file_path, True)
     ax = helpers.ProcessImage.imshow(result, ax)
     ax.axis('off')
 
