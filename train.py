@@ -61,7 +61,8 @@ if model != 0:
     # Define the loss function and optimizer
     criterion = nn.NLLLoss()
     # TODO Maybe move this to a select optimizer function
-    optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
+    #optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
+    optimizer = optim.Adam(model.parameters(), learning_rate) 
 
     # Train the model with validation
     nnModel.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)

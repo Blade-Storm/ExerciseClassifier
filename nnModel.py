@@ -30,9 +30,34 @@ def create_model(arch, hidden_units):
     elif arch.lower() == "densenet161":
         model = models.densenet161(pretrained=True)
         input_features = 2208
+    elif arch.lower() == "custom":
+        # Create custom model
+        class Model(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.fc1 = nn.Linear(150528, 1000)
+                self.fc2 = nn.Linear(1000, 500)
+                self.fc3 = nn.Linear(500, 100)
+                self.fc4 = nn.Linear(100, 50)
+                self.output = nn.Linear(50, 3)
+            
+            def forward(self, x):
+                # Flatten the image tensor
+                x = x.view(x.shape[0], -1)
+
+                x = F.dropout(F.relu(self.fc1(x)), 0.2)
+                x = F.dropout(F.relu(self.fc2(x)), 0.2)
+                x = F.dropout(F.relu(self.fc3(x)), 0.2)
+                x = F.dropout(F.relu(self.fc4(x)), 0.2)
+                x = F.log_softmax(self.output(x), dim=1)
+                return x
+
+        print("Done creating the model\n")
+        model = Model()
+        return model
     else:
         # We dont support the entered model architecture so return to start over
-        print("Model architecture: {} is not supported. \n Try vgg19 or densenet161".format(arch.lower()))
+        print("Model architecture: {} is not supported. \n Try vgg19, densenet161, or custom".format(arch.lower()))
         return 0
     
     # Freeze the parameters so we dont backpropagate through them
@@ -88,10 +113,16 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
             
             # Zero the gradients since they accumulate
             optimizer.zero_grad()
-            
+            ''' Flatten the image '''
+            #print(images.shape)
+            #images = images.view(images.size(0), -1)
+            # Resize images into a 1D vector, new shape is (batch size, color channels, image pixels) 
+            #mages.resize_(32, 3, 150528)
             # Get the log probability from the model
             logps = model.forward(images)
+            #ps = torch.exp(logps)
 
+            #print("Logps: {}, PS: {}".format(logps, ps))
             # Get the loss
             loss = criterion(logps, labels)
 
@@ -194,6 +225,8 @@ def save_model(model, train_datasets, learning_rate, batch_size, epochs, criteri
         input_features = 25088
     elif arch.lower() == "densenet161":
         input_features = 2208
+    elif arch.lower() == "custom":
+        input_features = 150528
 
     # Save other hyperparamters
     # TODO: Pass in the input size based on the model
@@ -225,6 +258,8 @@ def load_model(checkpoint_file):
         model = models.vgg19(pretrained=True)
     elif(checkpoint['arch'].lower() == 'densenet161'):
         model = models.densenet161(pretrained=True)
+    elif(checkpoint['arch'].lower() == 'custom'):
+        model = create_model('custom', 0)
 
     model.classifier = checkpoint['classifier'] 
     model.load_state_dict(checkpoint['state_dict'])
@@ -254,6 +289,9 @@ def predict(categories, image_path, model, use_gpu, topk):
         # Get the file extension
         _, file_extension = os.path.splitext(image_path)
 
+        # Get the cascade
+        face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+
         # Determine if the file is an image or video
         # If the file is a video use VideoCapture logic to get each frame in the video and track the weight to count reps
         # Return the reps, class and probabilities
@@ -261,6 +299,8 @@ def predict(categories, image_path, model, use_gpu, topk):
         if file_extension == '.mp4':
             # Get the vieo from a mp4 file
             video_capture = cv2.VideoCapture(image_path)
+
+            
 
             # Get how many frames are in the video to classify the exersice once at the start, middle, and end of the video
             # Set the frame_count to 
@@ -273,17 +313,6 @@ def predict(categories, image_path, model, use_gpu, topk):
             except:
                 print("There was an issue counting the frames in the video")
 
-            #def nothing(x):
-            #    pass
-
-            #cv2.namedWindow("Tracking Window")
-            #cv2.createTrackbar("Lower Hue", "Tracking Window", 0, 255, nothing)
-            #cv2.createTrackbar("Lower Saturation", "Tracking Window", 0, 255, nothing)
-            #cv2.createTrackbar("Lower Value", "Tracking Window", 0, 255, nothing)
-            #cv2.createTrackbar("Upper Hue", "Tracking Window", 255, 255, nothing)
-            #cv2.createTrackbar("Upper Saturation", "Tracking Window", 255, 255, nothing)
-            #cv2.createTrackbar("Upper Value", "Tracking Window", 255, 255, nothing)
-
     
             first_point = 0
             reps = 0
@@ -293,50 +322,29 @@ def predict(categories, image_path, model, use_gpu, topk):
             while True:   
                 # Capture the next frame
                 _, frame = video_capture.read()
-                #frame = cv2.imread("./ImagesForProject/test/3/image3771.jpg")
+                #frame = cv2.imread("./ImagesForProject/test/3/image345.jpg")
 
                 # If there are no more frames to capture break out of the loop
                 if frame is None:
                     break
 
+                # Convert the colored image from the video into an Gray image
+                gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray_frame, 1.3, 5)
+
+                # Draw the rectangle around the face
+                for (x,y,w,h) in faces:
+                    cv2.rectangle(frame, (x,y), (x+w, y+h), (255, 0, 0), 2)
+                    roi_gray = gray_frame[y:y+h, x:x+w]
+                    #print("Gray: {}".format(roi_gray))
+                    roi_color = frame[y:y+h, x:x+w]
+                    points = (x,y)
+                    print("point: {}".format(points[1]))
                 
-                # Convert the colored image from the video into an HSV image
-                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                #l_h = cv2.getTrackbarPos("Lower Hue", "Tracking Window")
-                #l_s = cv2.getTrackbarPos("Lower Saturation", "Tracking Window")
-                #l_v = cv2.getTrackbarPos("Lower Value", "Tracking Window")
-
-                #u_h = cv2.getTrackbarPos("Upper Hue", "Tracking Window")
-                #u_s = cv2.getTrackbarPos("Upper Saturation", "Tracking Window")
-                #u_v = cv2.getTrackbarPos("Upper Value", "Tracking Window")
-
-                # Define the color of the weights to track
-                # TODO: Figure out a more generic way to get the color of the wieghts. Perhaps train a classifier to return the RGB values to then convert to HSV
-                lower_color_bound = np.array([173 , 56, 16])
-                upper_color_bound = np.array([248,213,73])
-
-                # Create the mask with the upper and lower color bounds
-                mask = cv2.inRange(hsv, lower_color_bound, upper_color_bound)
-
-                # Get the points the correspond with the colors we are looking for
-                points = cv2.findNonZero(mask)
-                
-                # Get the avg of the points locations, this will allow us to center onto the color we are looking for
-                avg = np.mean(points, axis=0)
-                
-                # Get the height and the width of the frame to get the point where the object is on the screen
-                # Get the points corrdinates on the frame
-                frame_height, frame_width = frame.shape[:2]
-                # Get the width and height of the current screen
-                width  = int(GetSystemMetrics(0))
-                height = int(GetSystemMetrics(1))
-
-                # Get the point where the weights are
-                point_in_screen = ((width/frame_width * avg[0][0]), (height/frame_height * avg[0][1]))
                 
                 # Store the starting point
                 if first_point == 0:
-                    first_point = point_in_screen[1]
+                    first_point = points[1]
                 
                 # Classify the exercise and determine the reps
                 # Classify once at the begning, middle, and end of the video
@@ -380,7 +388,8 @@ def predict(categories, image_path, model, use_gpu, topk):
                 # Weight starts at the top where numbers are close to 0 and then moves down increasing disctance from x-axis
                 # The + 40 is abritrary and gives us a "range" for when there is variance when a person is moving but not starting the exercise movement
                 # Leaving and re-entering this range will determine a repitition
-                if point_in_screen[1] < first_point + 40:
+                point = points[1]
+                if point < first_point + 40:
                     # If left_range is true then we have returned from the bottom of the movement 
                     # Set left_range back to False since we are back at the top of the movement
                     # Incrament rep
@@ -390,7 +399,7 @@ def predict(categories, image_path, model, use_gpu, topk):
                         reps += 1
                         print("Total Reps: {}".format(reps))
                 # Weight is currently out of the top of the movement and has started to go or is coming back from the bottom
-                elif point_in_screen[1] > first_point + 40:
+                elif points[1] > first_point + 40:
                     # If left_range is False then we have just started the movement to go down
                     # Set completed_rep to False
                     # Set left_range to True 
@@ -404,13 +413,13 @@ def predict(categories, image_path, model, use_gpu, topk):
 
                 # For viewing purposes when using an image or video
                 #res = cv2.bitwise_and(frame, frame, mask = mask)
-                #cv2.imshow("frame", frame)
+                cv2.imshow("frame", frame)
                 #cv2.imshow("mask", mask)
                 #cv2.imshow("res", res)
                 
-                #key = cv2.waitKey(1)
-                #if key == 27:
-                #    break
+                key = cv2.waitKey(1)
+                if key == 27:
+                    break
 
             # Release the capture and kill any cv windows
             video_capture.release()
@@ -418,8 +427,8 @@ def predict(categories, image_path, model, use_gpu, topk):
 
 
         
-        elif file_extension == '.jpg':
-        # If the file is an image predict the class and return the class and probabilities
+        elif file_extension == '.jpg':           
+            # If the file is an image predict the class and return the class and probabilities
             # Processs the image
             image_tensor = helpers.ProcessImage.process_image(image_path, True)
 
