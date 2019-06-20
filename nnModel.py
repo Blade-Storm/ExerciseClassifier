@@ -24,53 +24,78 @@ def create_model(arch, hidden_units):
     # Define a new, untrained feed-forward network as a classifier, using ReLU activations and dropout
     print("Creating the model...")
     # Load a pretrained model
-    if arch.lower() == "vgg19":
-        model = models.vgg19(pretrained=True)
-        input_features = 25088
-    elif arch.lower() == "densenet161":
-        model = models.densenet161(pretrained=True)
-        input_features = 2208
+    if arch.lower() == "vgg19" or arch.lower() == "densenet161":
+        if arch.lower() == "vgg19":
+            model = models.vgg19(pretrained=True)
+            input_features = 25088
+        elif arch.lower() == "densenet161":
+            model = models.densenet161(pretrained=True)
+            input_features = 2208
+
+        # Freeze the parameters so we dont backpropagate through them
+        for param in model.parameters():
+            param.requires_grad = False
+
+        # Create our classifier to replace the current one in the model
+        model.classifier = nn.Sequential(nn.Linear(input_features,hidden_units),
+                                        nn.ReLU(),         
+                                        nn.Dropout(0.5),                            
+                                        nn.Linear(hidden_units,3),
+                                        nn.LogSoftmax(dim=1))
     elif arch.lower() == "custom":
         # Create custom model
         class Model(nn.Module):
             def __init__(self):
-                super().__init__()
-                self.fc1 = nn.Linear(150528, 1000)
-                self.fc2 = nn.Linear(1000, 500)
-                self.fc3 = nn.Linear(500, 100)
-                self.fc4 = nn.Linear(100, 50)
-                self.output = nn.Linear(50, 3)
+                super(Model, self).__init__()
+                self.fc1 = nn.Linear(150528, 1024)
+                self.fc2 = nn.Linear(1024, 512)
+                #self.conv1 = nn.Conv2d(3, 6, 3)
+                #self.conv2 = nn.Conv2d(6, 16, 3)
+                self.fc3 = nn.Linear(512, 256)
+                #self.fc4 = nn.Linear(256, 128)
+                #self.fc5 = nn.Linear(128, 64)
+                #self.fc6 = nn.Linear(64, 32)
+                #self.fc7 = nn.Linear(32, 16)
+                #self.fc8 = nn.Linear(16, 8)
+                self.output = nn.Linear(256, 3)
             
             def forward(self, x):
                 # Flatten the image tensor
                 x = x.view(x.shape[0], -1)
 
-                x = F.dropout(F.relu(self.fc1(x)), 0.2)
-                x = F.dropout(F.relu(self.fc2(x)), 0.2)
-                x = F.dropout(F.relu(self.fc3(x)), 0.2)
-                x = F.dropout(F.relu(self.fc4(x)), 0.2)
+                x = F.relu(self.fc1(x))
+                x = F.relu(self.fc2(x))
+                # Max pooling over a (2, 2) window
+                #x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
+                # If the size is a square you can only specify a single number
+                #x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+                #x = x.view(-1, self.num_flat_features(x))
+ 
+
+                x = F.dropout(F.relu(self.fc3(x)), 0.5)
+                # = F.dropout(F.relu(self.fc4(x)), 0.5)
+                #x = F.dropout(F.relu(self.fc5(x)), 0.5)
+                #x = F.dropout(F.relu(self.fc6(x)), 0.5)
+                #x = F.dropout(F.relu(self.fc7(x)), 0.5)
+                #x = F.dropout(F.relu(self.fc8(x)), 0.5)
                 x = F.log_softmax(self.output(x), dim=1)
                 return x
 
-        print("Done creating the model\n")
+            def num_flat_features(self, x):
+                size = x.size()[1:]  # all dimensions except the batch dimension
+                num_features = 1
+                for s in size:
+                    num_features *= s
+                return num_features
+
+
+
         model = Model()
-        return model
     else:
         # We dont support the entered model architecture so return to start over
         print("Model architecture: {} is not supported. \n Try vgg19, densenet161, or custom".format(arch.lower()))
         return 0
     
-    # Freeze the parameters so we dont backpropagate through them
-    for param in model.parameters():
-        param.requires_grad = False
-
-    # Create our classifier to replace the current one in the model
-    model.classifier = nn.Sequential(nn.Linear(input_features,hidden_units),
-                                     nn.ReLU(),         
-                                     nn.Dropout(0.5),                            
-                                     nn.Linear(hidden_units,3),
-                                     nn.LogSoftmax(dim=1))
-
     print("Done creating the model\n")
     return model
 
@@ -230,20 +255,41 @@ def save_model(model, train_datasets, learning_rate, batch_size, epochs, criteri
 
     # Save other hyperparamters
     # TODO: Pass in the input size based on the model
-    checkpoint = {'input_size': input_features,
-                'output_size': 102,
-                'hidden_units': hidden_units,
-                'arch': arch,
-                'learning_rate': learning_rate,
-                'batch_size': batch_size,
-                'classifier' : model.classifier,
-                'epochs': epochs,
-                'criterion': criterion,
-                'optimizer': optimizer.state_dict(),
-                'state_dict': model.state_dict(),
-                'class_to_idx': model.class_to_idx}
-
-
+    if arch.lower() == "vgg19" or arch.lower() == "densenet161":
+        checkpoint = {'input_size': input_features,
+                    'output_size': 3,
+                    'hidden_units': hidden_units,
+                    'arch': arch,
+                    'learning_rate': learning_rate,
+                    'batch_size': batch_size,
+                    'classifier' : model.classifier,
+                    'epochs': epochs,
+                    'criterion': criterion,
+                    'optimizer': optimizer.state_dict(),
+                    'state_dict': model.state_dict(),
+                    'class_to_idx': model.class_to_idx}
+    elif arch.lower() == "custom":
+        # Add all of the info we know
+        checkpoint = {'arch': arch,
+                    'learning_rate': learning_rate,
+                    'batch_size': batch_size,
+                    'epochs': epochs,
+                    'criterion': criterion,
+                    'optimizer': optimizer.state_dict(),
+                    'state_dict': model.state_dict(),
+                    'class_to_idx': model.class_to_idx}
+        # Add hidden layers weights and biases
+        count = 0
+        for param_tensor in model.state_dict():
+            # Get the weight for the layer
+            if count % 1:
+                checkpoint['layer_' + str(count) + '_input'] = model.state_dict()[param_tensor].size(0)
+                checkpoint['layer_' + str(count) + '_output'] = model.state_dict()[param_tensor].size(1)
+            else:
+            # Get the bias
+                checkpoint['layer_' + str(count) + '_bias'] = model.state_dict()[param_tensor].size(0)
+            count += 1
+            
     torch.save(checkpoint, 'checkpoint.pth')
     print("Done saving the model")
 
@@ -256,12 +302,14 @@ def load_model(checkpoint_file):
    
     if(checkpoint['arch'].lower() == 'vgg19'):
         model = models.vgg19(pretrained=True)
+        model.classifier = checkpoint['classifier'] 
     elif(checkpoint['arch'].lower() == 'densenet161'):
         model = models.densenet161(pretrained=True)
+        model.classifier = checkpoint['classifier'] 
     elif(checkpoint['arch'].lower() == 'custom'):
         model = create_model('custom', 0)
 
-    model.classifier = checkpoint['classifier'] 
+    
     model.load_state_dict(checkpoint['state_dict'])
     model.class_to_idx = checkpoint['class_to_idx']
 
