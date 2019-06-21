@@ -56,15 +56,15 @@ def create_model(arch, hidden_units):
                 #self.fc1 = nn.Linear(150528, 1024)
                 #self.fc2 = nn.Linear(1024, 512)
                 self.conv1 = nn.Conv2d(3, 6, 3)
-                #self.conv2 = nn.Conv2d(6, 16, 3)
+                self.conv2 = nn.Conv2d(6, 16, 3)
                 #self.conv3 = nn.Conv2d(16, 32, 3)
-                self.fc3 = nn.Linear(73926, 256)
-                self.fc4 = nn.Linear(256, 128)
+                self.fc3 = nn.Linear(46656, 256)
+                #self.fc4 = nn.Linear(256, 128)
                 #self.fc5 = nn.Linear(128, 64)
                 #self.fc6 = nn.Linear(64, 32)
                 #self.fc7 = nn.Linear(32, 16)
                 #self.fc8 = nn.Linear(16, 8)
-                self.output = nn.Linear(128, 3)
+                self.output = nn.Linear(256, 3)
             
             def forward(self, x):
                 # Flatten the image tensor
@@ -75,13 +75,13 @@ def create_model(arch, hidden_units):
                 # Max pooling over a (2, 2) window
                 x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
                 # If the size is a square you can only specify a single number
-                #x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+                x = F.max_pool2d(F.relu(self.conv2(x)), 2)
                 #$x = F.max_pool2d(F.relu(self.conv3(x)), 2)
                 x = x.view(-1, self.num_flat_features(x))
  
 
                 x = F.relu(self.fc3(x))
-                x = F.relu(self.fc4(x))
+                #x = F.relu(self.fc4(x))
                 #x = F.relu(self.fc5(x))
                 #x = F.dropout(F.relu(self.fc6(x)), 0.5)
                 #x = F.dropout(F.relu(self.fc7(x)), 0.5)

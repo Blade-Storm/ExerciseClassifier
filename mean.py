@@ -7,7 +7,7 @@ dataset = datasets.ImageFolder('./ImagesForProject/train', transform=transforms.
                              transforms.ToTensor()]))
 
 loader = torch.utils.data.DataLoader(dataset,
-                         batch_size=200,
+                         batch_size=250,
                          num_workers=0,
                          shuffle=False)
 
