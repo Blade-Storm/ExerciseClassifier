@@ -63,6 +63,7 @@ if model != 0:
     # TODO Maybe move this to a select optimizer function
     #optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
     optimizer = optim.Adam(model.parameters(), learning_rate) 
+    #optimizer = optim.SGD(model.parameters(), learning_rate) 
 
     # Train the model with validation
     nnModel.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)

@@ -16,16 +16,16 @@ def load_image_data(data_directory, batch_size):
                                         transforms.RandomResizedCrop(224),
                                         transforms.RandomHorizontalFlip(),
                                         transforms.ToTensor(),
-                                        transforms.Normalize([0.4274, 0.3916, 0.3793],
-                                                                [0.2947, 0.2791, 0.2734])])
+                                        transforms.Normalize([0.4270, 0.3878, 0.3717],
+                                                                [0.2894, 0.2724, 0.2662])])
 
     # For the test transforms:
     # Resize and crop
     valid_transforms = test_transforms = transforms.Compose([transforms.Resize(256),
                                         transforms.CenterCrop(224),
                                         transforms.ToTensor(),
-                                        transforms.Normalize([0.4274, 0.3916, 0.3793],
-                                                               [0.2947, 0.2791, 0.2734])])
+                                        transforms.Normalize([0.4270, 0.3878, 0.3717],
+                                                               [0.2894, 0.2724, 0.2662])])
 
 
     # Load the datasets with ImageFolder
