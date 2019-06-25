@@ -13,13 +13,19 @@ import numpy as np
 import win32api
 from win32api import GetSystemMetrics
 
-#from workspace_utils import active_session
-
-
-
 
 
 def create_model(arch, hidden_units):
+    '''
+        Creates a pretrained model using VGG19 or Densenet161 and returns the model
+        
+        Inputs:
+        arch - The architecture to be used. Either 'vgg19' or 'densenet161'
+        hidden_units - The number of units in the hidden layer
+        
+        Outputs:
+        model - The created (loaded) pretrained model
+    '''
     # Load a pretrained network (densenet161)
     # Define a new, untrained feed-forward network as a classifier, using ReLU activations and dropout
     print("Creating the model...")
@@ -58,7 +64,7 @@ def create_model(arch, hidden_units):
                 self.conv1 = nn.Conv2d(3, 6, 3)
                 self.conv2 = nn.Conv2d(6, 16, 3)
                 self.conv3 = nn.Conv2d(16, 32, 3)
-                
+
                 self.fc3 = nn.Linear(1568, 1024) #46656 #73926 #21632
                 #self.fc4 = nn.Linear(2048, 1024)
                 self.fc5 = nn.Linear(1024, 512)
@@ -111,12 +117,27 @@ def create_model(arch, hidden_units):
 
 
 def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, use_gpu):
+    '''
+        Trains a model using a given loss function, optimizer, dataloaders, epochs, and whether or not to use the GPU. Outputs loss and accuracy numbers
+        
+        Inputs:
+        model - The model to train
+        train_dataloaders - The data for the training
+        valid_dataloaders - The data for the validation
+        criterion - The loss function 
+        optimizer - The optimizer
+        epochs - The number of epochs to run the training for
+        use_gpu - Whether or not to train with the GPU
+        
+        Outputs:
+        Prints out the training and validation losses and accuracies
+    '''
     # Train the classifier layers using backpropagation using the pre-trained network to get the features
     # Track the loss and accuracy on the validation set to determine the best hyperparameters
     print("Training the model...\n")
 
     # Use the GPU if its available
-    if use_gpu:
+    if use_gpu and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
@@ -127,8 +148,6 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
     # Capture the current time for tracking purposes
     start_time = time.time()
 
-    # With an active session train our model
-    #with active_session():
     train_losses, validation_losses, training_accuracies, validation_accuracies = [], [], [], []
     
 
@@ -245,12 +264,29 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
 
 
 
-def save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch):
-
+def save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu):
+    '''
+        Saves a model to a checkpoint file with the learning rate, batch size, epochs, loss function, optimizer, hidden units, and architecture used in training
+        
+        Inputs:
+        model - The model to train
+        train_datasets - The dataset for the training. This is used to get the classes to indexes
+        learning_rate - The learning rate used for training
+        criterion - The loss function 
+        optimizer - The optimizer
+        epochs - The number of epochs to run the training for
+        hidden_units - The hidden layers unit size
+        arch - The architecture used
+        save_directory - The directory to save the pth file to
+        gpu - Boolean on whether or not gpu was used for training
+        
+        Outputs:
+        Saves the checkpoint.pth file to the given directory
+    '''
     print("Saving the model...")
     # Before saving the model set it to cpu to aviod loading issues later
-    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #model.to(device)
+    device = torch.device('cuda' if gpu and torch.cuda.is_available() else 'cpu')
+    model.to(device)
 
     # Save the train image dataset
     model.class_to_idx = train_datasets.class_to_idx
@@ -263,7 +299,6 @@ def save_model(model, train_datasets, learning_rate, batch_size, epochs, criteri
         input_features = 150528
 
     # Save other hyperparamters
-    # TODO: Pass in the input size based on the model
     if arch.lower() == "vgg19" or arch.lower() == "densenet161":
         checkpoint = {'input_size': input_features,
                     'output_size': 3,
@@ -303,24 +338,34 @@ def save_model(model, train_datasets, learning_rate, batch_size, epochs, criteri
     print("Done saving the model")
 
 
-# TODO: Write a function that loads a checkpoint and rebuilds the model
+
 def load_model(checkpoint_file):
+    '''
+        Loads a model using a checkpoint.pth file
+        
+        Inputs:
+        checkpoint_file - The file path and name for the checkpoint
+        
+        Outputs:
+        model - Returns the loaded model
+    '''
     print("Loading the model...")
-    # Load the model and force the tensors to be on the CPU
-    checkpoint = torch.load(checkpoint_file,  map_location=lambda storage, loc: storage)
-   
-    if(checkpoint['arch'].lower() == 'vgg19'):
-        model = models.vgg19(pretrained=True)
-        model.classifier = checkpoint['classifier'] 
-    elif(checkpoint['arch'].lower() == 'densenet161'):
-        model = models.densenet161(pretrained=True)
-        model.classifier = checkpoint['classifier'] 
+    # Load the checkpoint file
+    checkpoint = torch.load(checkpoint_file)
+    
+    arch = checkpoint['arch'].lower()
+    
+    # Load the model
+    if(arch == 'vgg19' or arch == 'densenet161'):
+        model = getattr(torchvision.models, checkpoint['arch'])(pretrained = True)
+        model.classifier = checkpoint['classifier']  
     elif(checkpoint['arch'].lower() == 'custom'):
         model = create_model('custom', 0)
 
     
     model.load_state_dict(checkpoint['state_dict'])
     model.class_to_idx = checkpoint['class_to_idx']
+    model.optimizer = checkpoint['optimizer']
 
     # Freeze the parameters so we dont backpropagate through them
     for param in model.parameters():
@@ -333,10 +378,21 @@ def load_model(checkpoint_file):
 
 
 def predict(categories, image_path, model, use_gpu, topk):
-    ''' Predict the class (or classes) of an image using a trained deep learning model.
+    '''
+        Predict the class (or classes) of an image using a trained deep learning model.
+        
+        Inputs:
+        categories - The categories json file that maps the names of the flowers
+        image_path - The path and file name to the image to predict
+        use_gpu - Whether or not to use the gpu for inference
+        topk - The top n restults of the inference
+        
+        Outputs:
+        top_p - The probabilities for the predictions
+        labels - The class labels for the predictions
     '''
     # Use the GPU if its available
-    #device = torch.device('cuda' if use_gpu else 'cpu')
+    #device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
     model.to('cpu')
     
     #Switch the model to evaluation mode to turn off dropout
@@ -402,6 +458,30 @@ def predict(categories, image_path, model, use_gpu, topk):
                 # Store the starting point
                 if first_point == 0:
                     first_point = points[1]
+
+                # For Exersices that start with the weight at the top and move: TOP -> BOTTOM -> TOP to count one repitition:
+                # If the current point is less than the starting point we are still at the top of the movement
+                # Weight starts at the top where numbers are close to 0 and then moves down increasing disctance from x-axis
+                # The + 40 is abritrary and gives us a "range" for when there is variance when a person is moving but not starting the exercise movement
+                # Leaving and re-entering this range will determine a repitition
+                point = points[1]
+                if point < first_point + 40:
+                    # If left_range is true then we have returned from the bottom of the movement 
+                    # Set left_range back to False since we are back at the top of the movement
+                    # Incrament rep
+                    if left_range == True:
+                        completed_rep = True
+                        left_range = False
+                        reps += 1
+                        print("Total Reps: {}".format(reps))
+                # Weight is currently out of the top of the movement and has started to go or is coming back from the bottom
+                elif points[1] > first_point + 40:
+                    # If left_range is False then we have just started the movement to go down
+                    # Set completed_rep to False
+                    # Set left_range to True 
+                    if left_range == False:
+                        completed_rep = False
+                        left_range = True
                 
                 # Classify the exercise and determine the reps
                 # Classify once at the begning, middle, and end of the video
@@ -437,33 +517,7 @@ def predict(categories, image_path, model, use_gpu, topk):
                     # Zip the probabilities with the exersice name
                     output = list(zip(top_p, labels))
 
-                    print("Top Class and Probability: {} {}".format(output[0][1], output[0][0] * 100))
-                    
-
-                # For Exersices that start with the weight at the top and move: TOP -> BOTTOM -> TOP to count one repitition:
-                # If the current point is less than the starting point we are still at the top of the movement
-                # Weight starts at the top where numbers are close to 0 and then moves down increasing disctance from x-axis
-                # The + 40 is abritrary and gives us a "range" for when there is variance when a person is moving but not starting the exercise movement
-                # Leaving and re-entering this range will determine a repitition
-                point = points[1]
-                if point < first_point + 40:
-                    # If left_range is true then we have returned from the bottom of the movement 
-                    # Set left_range back to False since we are back at the top of the movement
-                    # Incrament rep
-                    if left_range == True:
-                        completed_rep = True
-                        left_range = False
-                        reps += 1
-                        print("Total Reps: {}".format(reps))
-                # Weight is currently out of the top of the movement and has started to go or is coming back from the bottom
-                elif points[1] > first_point + 40:
-                    # If left_range is False then we have just started the movement to go down
-                    # Set completed_rep to False
-                    # Set left_range to True 
-                    if left_range == False:
-                        completed_rep = False
-                        left_range = True
-                        
+                    print("Top Class and Probability: {} {}".format(output[0][1], output[0][0] * 100))     
 
                 #print("point_in_screen: {}".format(point_in_screen[1]))
                 #print("first_point: {}".format(first_point))

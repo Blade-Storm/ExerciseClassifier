@@ -69,4 +69,4 @@ if model != 0:
     nnModel.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)
 
     # Save the model
-    nnModel.save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch)
+    nnModel.save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu)
