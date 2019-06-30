@@ -25,8 +25,6 @@ class Model(nn.Module):
         self.fc3 = nn.Linear(3136, 1024) 
         self.output = nn.Linear(1024, 3)
 
-        self.initialize_weights()
-
     
     def forward(self, x):
         '''
@@ -58,25 +56,25 @@ class Model(nn.Module):
             num_features *= s
         return num_features
 
-    def initialize_weights(self):
+    def initialize_weights(self, m):
         '''
             Initialize the weights using uniform normal distribution
 
             input: The model to initialize the weights for
         '''
         # Get the name of the classes in the model
-        classname = self.__class__.__name__
+        classname = m.__class__.__name__
 
         # For each Linear layer initialize the weights using uniform normal distribution
         if classname.find('Linear') != -1:
             # Get the number of input features
-            n = self.in_features
-            print(n)
+            n = m.in_features
+
             # Get the normal distribution centered at 0 
             y = np.random.normal(n)
             y = 1 / np.sqrt(y)
 
             # Initialize the weights uniformly and Bias with 0
-            self.weight.data.uniform_(-y, y)
-            self.bias.data.fill_(0)
+            m.weight.data.uniform_(-y, y)
+            m.bias.data.fill_(0)
 

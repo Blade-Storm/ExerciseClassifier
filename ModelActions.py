@@ -52,6 +52,8 @@ def create_model(arch, hidden_units):
     elif arch.lower() == "custom":
         # Create custom model
         model = nnModel.Model()
+        # Initialize the weights
+        model.apply(model.initialize_weights)
     else:
         # We dont support the entered model architecture so return to start over
         print("Model architecture: {} is not supported. \n Try vgg19, densenet161, or custom".format(arch.lower()))
