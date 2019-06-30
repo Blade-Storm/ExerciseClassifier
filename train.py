@@ -5,6 +5,7 @@ from torch import optim as optim
 import nnModel
 import helpers.DataLoader
 import argparse
+import ModelActions
 
 #######################################################
 # Train a Neural Network using transfer learning:
@@ -54,7 +55,8 @@ gpu = args.gpu
 train_dataloaders, valid_dataloaders, test_dataloaders, train_datasets = helpers.DataLoader.load_image_data(data_directory, batch_size)
     
 # Create the model. Returns 0 if model cant be created
-model = nnModel.create_model(arch, hidden_units)
+model = ModelActions.create_model(arch, hidden_units)
+
 
 # If we sucessfully create a model continue with the training
 if model != 0:
@@ -67,7 +69,7 @@ if model != 0:
         optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
 
     # Train the model with validation
-    nnModel.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)
+    ModelActions.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)
 
     # Save the model
-    nnModel.save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu)
+    ModelActions.save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu)

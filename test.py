@@ -3,6 +3,7 @@ import torchvision
 from torchvision import datasets, transforms, models
 import helpers.JsonLoader
 import argparse
+import ModelActions
 
 
 #######################################################
@@ -35,10 +36,10 @@ category_name = args.category_names
 use_gpu = args.gpu
 
 # Load the model
-model = nnModel.load_model(checkpoint)
+model = ModelActions.load_model(checkpoint)
 
 # Load the content of the json file
 categories = helpers.JsonLoader.load_json(category_name)
 
 # Predict
-nnModel.predict(categories, data_directory, model, use_gpu, top_k)
+ModelActions.predict(categories, data_directory, model, use_gpu, top_k)
