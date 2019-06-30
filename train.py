@@ -60,10 +60,11 @@ model = nnModel.create_model(arch, hidden_units)
 if model != 0:
     # Define the loss function and optimizer
     criterion = nn.NLLLoss()
-    # TODO Maybe move this to a select optimizer function
-    #optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
-    optimizer = optim.Adam(model.parameters(), learning_rate) 
-    #optimizer = optim.SGD(model.parameters(), learning_rate) 
+
+    if arch == 'custom':
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    else:
+        optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
 
     # Train the model with validation
     nnModel.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)

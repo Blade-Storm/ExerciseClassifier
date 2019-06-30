@@ -59,40 +59,29 @@ def create_model(arch, hidden_units):
         class Model(nn.Module):
             def __init__(self):
                 super(Model, self).__init__()
-                #self.fc1 = nn.Linear(150528, 1024)
-                #self.fc2 = nn.Linear(1024, 512)
-                self.conv1 = nn.Conv2d(3, 6, 3)
-                self.conv2 = nn.Conv2d(6, 16, 3)
-                self.conv3 = nn.Conv2d(16, 32, 3)
 
-                self.fc3 = nn.Linear(1568, 1024) #46656 #73926 #21632
-                #self.fc4 = nn.Linear(2048, 1024)
-                self.fc5 = nn.Linear(1024, 512)
-                self.fc6 = nn.Linear(512, 256)
-                self.fc7 = nn.Linear(256, 128)
-                self.fc8 = nn.Linear(128, 64)
-                self.output = nn.Linear(64, 3)
+                # 224 x 224 x 3
+                self.conv1 = nn.Conv2d(3, 16, 3)
+                # 74 x 74 x 16
+                self.conv2 = nn.Conv2d(16, 32, 3)
+                # 24 x 24 x 32
+                self.conv3 = nn.Conv2d(32, 64, 3)
+
+                self.pool = nn.MaxPool2d(3, 3)
+
+                # 8 x 8 x 64
+                self.fc3 = nn.Linear(3136, 1024) 
+                self.output = nn.Linear(1024, 3)
             
             def forward(self, x):
-                # Flatten the image tensor
-                #x = x.view(x.shape[0], -1)
 
-                #x = F.dropout(F.relu(self.fc1(x)), 0.5)
-                #x = F.dropout(F.relu(self.fc2(x)), 0.5)
-                # Max pooling over a (2, 2) window
-                x = F.max_pool2d(F.relu(self.conv1(x)), (3, 3))
-                # If the size is a square you can only specify a single number
-                x = F.max_pool2d(F.relu(self.conv2(x)), 3)
-                x = F.max_pool2d(F.relu(self.conv3(x)), 3)
+                x = self.pool((F.relu(self.conv1(x))))
+                x = self.pool((F.relu(self.conv2(x))))
+                x = self.pool((F.relu(self.conv3(x))))                
+
                 x = x.view(-1, self.num_flat_features(x))
- 
 
                 x = F.relu(self.fc3(x))
-                #x = F.relu(self.fc4(x))
-                x = F.relu(self.fc5(x))
-                x = F.relu(self.fc6(x))
-                x = F.relu(self.fc7(x))
-                x = F.relu(self.fc8(x))
                 x = F.log_softmax(self.output(x), dim=1)
                 return x
 
