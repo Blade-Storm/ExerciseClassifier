@@ -26,7 +26,7 @@ parser.add_argument('--save_dir', default='/',
 # TODO: Add more support for other architectures                    
 # 3. Choose the architecture
 parser.add_argument('--arch', default="vgg19",
-                    help="The architecture you wish to train the model with. Can be: vgg19 or densenet161")
+                    help="The architecture you wish to train the model with. Can be: vgg19, densenet161, or custom")
 # 4. Set the hyperparameters: Learning Rate, Hidden Units, Training Epochs, Training batch size
 parser.add_argument('--learning_rate', type=float, default="0.01",
                     help="The learning rate for the model")
@@ -69,7 +69,7 @@ if model != 0:
         optimizer = optim.Adam(model.classifier.parameters(), learning_rate) 
 
     # Train the model with validation
-    ModelActions.train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu)
+    ModelActions.train_model(model, save_directory, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, gpu, arch)
 
     # Save the model
-    ModelActions.save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu)
+    #ModelActions.save_model(model, save_directory, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu)

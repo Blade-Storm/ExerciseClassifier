@@ -11,18 +11,22 @@ class Model(nn.Module):
 
             This network is created with three convolutional layers and two linear layers
         '''
+        # 224 x 224 x 2
+        self.conv1 = nn.Conv2d(3, 16, 2)
+        # 111 x 111 x 16
+        self.conv2 = nn.Conv2d(16, 32, 2)
+        # 55 x 55 x 32
+        self.conv3 = nn.Conv2d(32, 64, 2)
+        # 27 x 27 x 64
+        self.conv4 = nn.Conv2d(64, 128, 2)
+        # 13 x 13 x 128
+        self.conv5 = nn.Conv2d(128, 256, 2)
 
-        # 224 x 224 x 3
-        self.conv1 = nn.Conv2d(3, 16, 3)
-        # 74 x 74 x 16
-        self.conv2 = nn.Conv2d(16, 32, 3)
-        # 24 x 24 x 32
-        self.conv3 = nn.Conv2d(32, 64, 3)
 
-        self.pool = nn.MaxPool2d(3, 3)
+        self.pool = nn.MaxPool2d(2, 2)
 
-        # 8 x 8 x 64
-        self.fc3 = nn.Linear(3136, 1024) 
+        # 6 x 6 x 256
+        self.fc1 = nn.Linear(6*6*256, 1024) 
         self.output = nn.Linear(1024, 3)
 
     
@@ -35,11 +39,13 @@ class Model(nn.Module):
         '''
         x = self.pool((F.relu(self.conv1(x))))
         x = self.pool((F.relu(self.conv2(x))))
-        x = self.pool((F.relu(self.conv3(x))))                
+        x = self.pool((F.relu(self.conv3(x))))
+        x = self.pool((F.relu(self.conv4(x))))
+        x = self.pool((F.relu(self.conv5(x))))
 
         x = x.view(-1, self.num_flat_features(x))
 
-        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc1(x))
         x = F.log_softmax(self.output(x), dim=1)
         return x
 
@@ -77,4 +83,7 @@ class Model(nn.Module):
             # Initialize the weights uniformly and Bias with 0
             m.weight.data.uniform_(-y, y)
             m.bias.data.fill_(0)
+        if classname.find('Conv2d') != -1:
+            torch.nn.init.xavier_uniform_(m.weight)
+            m.bias.data.fill_(0.01)
 

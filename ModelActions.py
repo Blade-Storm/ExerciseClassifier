@@ -13,6 +13,7 @@ import numpy as np
 import win32api
 from win32api import GetSystemMetrics
 import nnModel
+import math
 
 
 
@@ -49,11 +50,13 @@ def create_model(arch, hidden_units):
                                         nn.Dropout(0.5),                            
                                         nn.Linear(hidden_units,3),
                                         nn.LogSoftmax(dim=1))
+        print(model)
     elif arch.lower() == "custom":
         # Create custom model
         model = nnModel.Model()
         # Initialize the weights
         model.apply(model.initialize_weights)
+        print(model)
     else:
         # We dont support the entered model architecture so return to start over
         print("Model architecture: {} is not supported. \n Try vgg19, densenet161, or custom".format(arch.lower()))
@@ -64,7 +67,7 @@ def create_model(arch, hidden_units):
 
 
 
-def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, use_gpu):
+def train_model(model, save_directory, train_dataloaders, valid_dataloaders, criterion, optimizer, epochs, use_gpu, arch):
     '''
         Trains a model using a given loss function, optimizer, dataloaders, epochs, and whether or not to use the GPU. Outputs loss and accuracy numbers
         
@@ -98,6 +101,10 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
 
     train_losses, validation_losses, training_accuracies, validation_accuracies = [], [], [], []
     
+    # Set a variable to track if the model is improving during training. We will use this as a flag to break
+    # the training loop if we arent improving.
+    stallCount = 0
+    minLoss = math.inf
 
     # Create the training loop
     for e in range(epochs):
@@ -128,7 +135,7 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
             optimizer.step()
 
             # Keep track of the training loss
-            training_loss += loss.item()
+            training_loss += loss.item()    
 
             # Get the top class from the predictions
             ps = torch.exp(logps)
@@ -193,6 +200,17 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
                 "Validation Accuracy: {}\n".format(validation_accuracy/len(valid_dataloaders) * 100),
                 "Total Time: {}\n".format(elapsed_time))  
 
+        # If we havent improved the loss in 10 epochs then break
+        # Otherwise if the loss improved save the model
+        if(validation_losses[len(validation_losses) - 1] <= minLoss):
+            stallCount = 0
+            minLoss = validation_losses[len(validation_losses) - 1] 
+            save_checkpoint(model, save_directory, use_gpu, arch)
+        else:
+            stallCount += 1  
+            if(stallCount >= 10):
+                break  
+
     
     plt.plot(train_losses, label='Training loss')
     plt.plot(validation_losses, label='Validation loss')
@@ -206,12 +224,46 @@ def train_model(model, train_dataloaders, valid_dataloaders, criterion, optimize
 
 
 
-def save_model(model, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu):
+def save_checkpoint(model, save_directory, gpu, arch):
+    '''
+        Saves a checkpoint
+    '''
+    print("Saving the checkpoint...")
+    # Before saving the model set it to cpu to aviod loading issues later
+    device = torch.device('cuda' if gpu and torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
+        # Save other hyperparamters
+    if arch.lower() == "vgg19" or arch.lower() == "densenet161":
+        checkpoint = {'arch': arch,
+                    'classifier' : model.classifier,
+                    'state_dict': model.state_dict()}
+    elif arch.lower() == "custom":
+        # Add all of the info we know
+        checkpoint = {'arch': arch,
+                    'state_dict': model.state_dict()}
+        # Add hidden layers weights and biases
+        count = 0
+        for param_tensor in model.state_dict():
+            # Get the weight for the layer
+            if count % 1:
+                checkpoint['layer_' + str(count) + '_input'] = model.state_dict()[param_tensor].size(0)
+                checkpoint['layer_' + str(count) + '_output'] = model.state_dict()[param_tensor].size(1)
+            else:
+            # Get the bias
+                checkpoint['layer_' + str(count) + '_bias'] = model.state_dict()[param_tensor].size(0)
+            count += 1
+
+    torch.save(checkpoint, save_directory + '.pth')
+    print("Done saving the checkpoint \n")
+
+def save_model(model, save_directory, train_datasets, learning_rate, batch_size, epochs, criterion, optimizer, hidden_units, arch, gpu):
     '''
         Saves a model to a checkpoint file with the learning rate, batch size, epochs, loss function, optimizer, hidden units, and architecture used in training
         
         Inputs:
         model - The model to train
+        save_directory - The directory with path to save to
         train_datasets - The dataset for the training. This is used to get the classes to indexes
         learning_rate - The learning rate used for training
         criterion - The loss function 
@@ -276,7 +328,7 @@ def save_model(model, train_datasets, learning_rate, batch_size, epochs, criteri
                 checkpoint['layer_' + str(count) + '_bias'] = model.state_dict()[param_tensor].size(0)
             count += 1
             
-    torch.save(checkpoint, 'checkpoint.pth')
+    torch.save(checkpoint, save_directory)
     print("Done saving the model")
 
 
@@ -306,8 +358,8 @@ def load_model(checkpoint_file):
 
     
     model.load_state_dict(checkpoint['state_dict'])
-    model.class_to_idx = checkpoint['class_to_idx']
-    model.optimizer = checkpoint['optimizer']
+    #model.class_to_idx = checkpoint['class_to_idx']
+    #model.optimizer = checkpoint['optimizer']
 
     # Freeze the parameters so we dont backpropagate through them
     for param in model.parameters():
